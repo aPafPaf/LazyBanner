@@ -154,12 +154,12 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
 
         UpdateValour();
 
-        //if (_valour < Settings.ValorTrigerValue.Value)
-        //{
-        //    _currentBannerBuffs.Clear();
-        //    _missingBuffs.Clear();
-        //    return false;
-        //}
+        if (_valour < Settings.ValorTrigerValue.Value)
+        {
+            _currentBannerBuffs.Clear();
+            _missingBuffs.Clear();
+            return false;
+        }
 
         UpdateBannerBuffs();
 
