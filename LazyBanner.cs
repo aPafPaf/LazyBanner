@@ -49,7 +49,7 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
         if (!UpdateData())
         {
             _lastPressTime = default;
-            //return null;
+            return null;
         }
 
         if(Settings.OnOff.PressedOnce())
