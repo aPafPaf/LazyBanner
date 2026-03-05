@@ -4,6 +4,7 @@ using ExileCore.PoEMemory.Components;
 using ExileCore.Shared.Helpers;
 using ExileCore.Shared.Nodes;
 using SharpDX;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -13,33 +14,38 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
 {
     private record struct BannerBuff(string Name, float Timer);
 
-    private const float MaxTime = 3f;
-
     private readonly Dictionary<string, HotkeyNodeV2.HotkeyNodeValue> _buffKeys = new();
+    private readonly Dictionary<string, int> _buffValourThresholds = new();
     private readonly Dictionary<string, float> _currentBannerBuffs = new();
     private readonly List<BannerBuff> _missingBuffs = new();
+    private readonly Dictionary<string, DateTime> _lastPressPerBanner = new();
 
     private Element LifeOrb => GameController.Game.IngameState.IngameUi.GameUI.LifeOrb;
     private float _valour;
-    private System.DateTime _lastPressTime;
+    private DateTime _lastPressTime;
 
     private static readonly Dictionary<string, string> BannerBuffNames = new()
     {
         { "DefianceBanner", "armour_evasion_banner_buff_aura" },
-        { "WarBanner", "bloodstained_banner_buff_aura" },
-        { "DreadBanner", "puresteel_banner_buff_aura" }
+        { "WarBanner",      "bloodstained_banner_buff_aura"   },
+        { "DreadBanner",    "puresteel_banner_buff_aura"      }
     };
 
     private static readonly Dictionary<string, string> BannerBuffNamesActor = new()
     {
-        { "armour_evasion_banner_buff_aura","DefianceBanner" },
-        { "bloodstained_banner_buff_aura","WarBanner" },
-        { "puresteel_banner_buff_aura","DreadBanner" }
+        { "armour_evasion_banner_buff_aura", "DefianceBanner" },
+        { "bloodstained_banner_buff_aura",   "WarBanner"      },
+        { "puresteel_banner_buff_aura",      "DreadBanner"    }
     };
 
     public override bool Initialise()
     {
-        Settings.UpdateSettingsButton.OnPressed += UpdateSettings;
+        Settings.Work.Value = false;
+
+        Settings.EnableDefianceBanner.OnValueChanged += (_, _) => UpdateSettings();
+        Settings.EnableWarBanner.OnValueChanged += (_, _) => UpdateSettings();
+        Settings.EnableDreadBanner.OnValueChanged += (_, _) => UpdateSettings();
+
         UpdateSettings();
         return true;
     }
@@ -52,7 +58,7 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
             return null;
         }
 
-        if(Settings.OnOff.PressedOnce())
+        if (Settings.OnOff.PressedOnce())
             Settings.Work.Value = !Settings.Work.Value;
 
         if (!Settings.Work.Value)
@@ -61,20 +67,28 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
         if (Settings.Autoexertion.Value && !HasBuffAutoexertion())
             return null;
 
-        var now = System.DateTime.Now;
+        var now = DateTime.Now;
 
         if ((now - _lastPressTime).TotalMilliseconds < Settings.Cooldown.Value)
             return null;
 
         foreach (var buff in _missingBuffs.OrderBy(x => x.Timer))
         {
-            if (!_buffKeys.TryGetValue(buff.Name, out HotkeyNodeV2.HotkeyNodeValue value))
+            if (!_buffKeys.TryGetValue(buff.Name, out var hotkey))
+                continue;
+
+            if (_buffValourThresholds.TryGetValue(buff.Name, out int threshold) && _valour < threshold)
+                continue;
+
+            if (_lastPressPerBanner.TryGetValue(buff.Name, out var lastPress) &&
+                (now - lastPress).TotalMilliseconds < Settings.BannerCooldown.Value)
                 continue;
 
             if (GameController.Window.IsForeground() && AllowToCast(buff.Name))
             {
-                InputHelper.SendInputPress(value);
+                InputHelper.SendInputPress(hotkey);
                 _lastPressTime = now;
+                _lastPressPerBanner[buff.Name] = now;
                 break;
             }
         }
@@ -87,26 +101,51 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
         if (!Settings.Render.Value)
             return;
 
-        Graphics.DrawText($"Valour: {_valour:F0}", LifeOrb.GetClientRectCache.TopLeft);
+        var basePos = LifeOrb.GetClientRectCache.TopLeft;
+        var origin = new System.Numerics.Vector2(
+            basePos.X + Settings.OverlayX.Value,
+            basePos.Y + Settings.OverlayY.Value
+        );
+
+        var statusText = Settings.Work.Value ? "LazyBanner: ON" : "LazyBanner: OFF";
+        var statusColor = Settings.Work.Value ? Color.Green : Color.Red;
+        Graphics.DrawText(statusText, origin, statusColor);
+
+        Graphics.DrawText(
+            $"Valour: {_valour:F0}",
+            new System.Numerics.Vector2(origin.X, origin.Y + 12)
+        );
 
         if (!GameController.Player.TryGetComponent(out Buffs buffs) || buffs.BuffsList is null)
             return;
 
-        var activeBuffNames = buffs.BuffsList
+        var activeLookup = buffs.BuffsList
             .Where(b => _buffKeys.ContainsKey(b.Name))
             .ToDictionary(b => b.Name, b => b.Timer);
 
-        int yOffset = 10;
-
+        var now = DateTime.Now;
+        int yOffset = 24;
         foreach (var buff in _buffKeys)
         {
-            var position = new System.Numerics.Vector2(LifeOrb.GetClientRectCache.TopLeft.X, LifeOrb.GetClientRectCache.TopLeft.Y + yOffset);
-            var hasBuff = activeBuffNames.TryGetValue(buff.Key, out float timer);
-            var color = hasBuff ? Color.Green : Color.White;
-            var text = hasBuff ? $"{buff.Key}: {timer:F3}" : buff.Key;
+            var pos = new System.Numerics.Vector2(origin.X, origin.Y + yOffset);
+            var hasBuff = activeLookup.TryGetValue(buff.Key, out float timer);
+            var standing = hasBuff && timer == float.PositiveInfinity;
 
-            Graphics.DrawText(text, position, color);
-            yOffset += 10;
+            var onCooldown = _lastPressPerBanner.TryGetValue(buff.Key, out var lastPress) &&
+                             (now - lastPress).TotalMilliseconds < Settings.BannerCooldown.Value;
+
+            var color = standing ? Color.Yellow
+                      : onCooldown ? Color.Orange
+                      : hasBuff ? Color.Green
+                                    : Color.White;
+
+            var text = standing ? $"{buff.Key}: standing"
+                     : onCooldown ? $"{buff.Key}: cd {(Settings.BannerCooldown.Value - (now - lastPress).TotalMilliseconds) / 1000.0:F1}s"
+                     : hasBuff ? $"{buff.Key}: {timer:F2}s (buff)"
+                                  : $"{buff.Key}: —";
+
+            Graphics.DrawText(text, pos, color);
+            yOffset += 12;
         }
     }
 
@@ -118,28 +157,24 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
         return buffs.BuffsList.Any(x => x.DisplayName.Equals("Autoexertion"));
     }
 
-    private bool AllowToCast(string buffName)
+    private bool AllowToCast(string auraBuffName)
     {
-        if (string.IsNullOrEmpty(buffName))
+        if (string.IsNullOrEmpty(auraBuffName))
             return false;
 
-        if (!BannerBuffNamesActor.TryGetValue(buffName, out var actorSkillName))
+        if (!BannerBuffNamesActor.TryGetValue(auraBuffName, out var skillName))
             return false;
 
-        return HasAllowedSkill(actorSkillName);
+        return HasAllowedSkill(skillName);
     }
 
     private bool HasAllowedSkill(string skillName)
     {
-        if (!GameController.Player.TryGetComponent(out Actor componentActor))
+        if (!GameController.Player.TryGetComponent(out Actor actor))
             return false;
 
-        var actorSkills = componentActor.ActorSkills;
-
-        if (actorSkills is null)
-            return false;
-
-        return actorSkills.Any(skill => skill.Name == skillName && skill.AllowedToCast);
+        var skills = actor.ActorSkills;
+        return skills is not null && skills.Any(s => s.Name == skillName && s.AllowedToCast);
     }
 
     private bool UpdateData()
@@ -149,18 +184,11 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
             _valour = 0;
             _currentBannerBuffs.Clear();
             _missingBuffs.Clear();
+            _lastPressPerBanner.Clear();
             return false;
         }
 
         UpdateValour();
-
-        if (_valour < Settings.ValorTrigerValue.Value)
-        {
-            _currentBannerBuffs.Clear();
-            _missingBuffs.Clear();
-            return false;
-        }
-
         UpdateBannerBuffs();
 
         return _missingBuffs.Count > 0;
@@ -176,36 +204,45 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
 
         foreach (var buff in buffs.BuffsList)
         {
-            if (_buffKeys.ContainsKey(buff.Name))
-            {
-                if (buff.Timer == float.PositiveInfinity)
-                    _currentBannerBuffs[buff.Name] = buff.Timer;
+            if (!_buffKeys.ContainsKey(buff.Name))
+                continue;
 
-                if (buff.Timer > Settings.RePlaceBannerTimeValue.Value &&
-                    buff.MaxTime == MaxTime)
-                    _currentBannerBuffs[buff.Name] = buff.Timer;
-            }
+            if (buff.Timer == float.PositiveInfinity)
+                _currentBannerBuffs[buff.Name] = buff.Timer;
         }
 
         foreach (var buff in _buffKeys)
         {
-            if (!_currentBannerBuffs.TryGetValue(buff.Key, out float value))
-                _missingBuffs.Add(new BannerBuff(buff.Key, value));
+            if (!_currentBannerBuffs.ContainsKey(buff.Key))
+                _missingBuffs.Add(new BannerBuff(buff.Key, 0f));
         }
     }
 
     private void UpdateSettings()
     {
         _buffKeys.Clear();
+        _buffValourThresholds.Clear();
 
         if (Settings.EnableDefianceBanner.Value)
-            _buffKeys.Add(BannerBuffNames["DefianceBanner"], Settings.DefianceBanner.Value);
+        {
+            var aura = BannerBuffNames["DefianceBanner"];
+            _buffKeys[aura] = Settings.DefianceBanner.Value;
+            _buffValourThresholds[aura] = Settings.DefianceBannerValor.Value;
+        }
 
         if (Settings.EnableWarBanner.Value)
-            _buffKeys.Add(BannerBuffNames["WarBanner"], Settings.WarBanner.Value);
+        {
+            var aura = BannerBuffNames["WarBanner"];
+            _buffKeys[aura] = Settings.WarBanner.Value;
+            _buffValourThresholds[aura] = Settings.WarBannerValor.Value;
+        }
 
         if (Settings.EnableDreadBanner.Value)
-            _buffKeys.Add(BannerBuffNames["DreadBanner"], Settings.DreadBanner.Value);
+        {
+            var aura = BannerBuffNames["DreadBanner"];
+            _buffKeys[aura] = Settings.DreadBanner.Value;
+            _buffValourThresholds[aura] = Settings.DreadBannerValor.Value;
+        }
     }
 
     private void UpdateValour()
