@@ -12,6 +12,12 @@ public class LazyBannerSettings : ISettings
     [Menu("Autoexertion", "")]
     public ToggleNode Autoexertion { get; set; } = new ToggleNode(false);
 
+    [Menu("On/Off", "")]
+    public HotkeyNodeV2 OnOff { get; set; } = Keys.Delete;
+
+    public ToggleNode Work { get; set; } = new ToggleNode(false);
+
+
     [Menu("Valor Triger Value")]
     public RangeNode<int> ValorTrigerValue { get; set; } = new RangeNode<int>(50, 0, 105);
 
@@ -49,4 +55,7 @@ public class LazyBannerSettings : ISettings
 
     [Menu("Update Settings", "")]
     public ButtonNode UpdateSettingsButton { get; set; } = new ButtonNode();
+
+    [Menu("Render", "")]
+    public ToggleNode Render { get; set; } = new ToggleNode(false);
 }

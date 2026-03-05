@@ -52,6 +52,12 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
             //return null;
         }
 
+        if(Settings.OnOff.PressedOnce())
+            Settings.Work.Value = !Settings.Work.Value;
+
+        if (!Settings.Work.Value)
+            return null;
+
         if (Settings.Autoexertion.Value && !HasBuffAutoexertion())
             return null;
 
@@ -78,6 +84,9 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
 
     public override void Render()
     {
+        if (!Settings.Render.Value)
+            return;
+
         Graphics.DrawText($"Valour: {_valour:F0}", LifeOrb.GetClientRectCache.TopLeft);
 
         if (!GameController.Player.TryGetComponent(out Buffs buffs) || buffs.BuffsList is null)
