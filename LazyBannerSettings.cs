@@ -20,8 +20,8 @@ public class LazyBannerSettings : ISettings
     [Menu("Cooldown (ms)", "Minimum delay between any key presses")]
     public RangeNode<int> Cooldown { get; set; } = new RangeNode<int>(100, 0, 1000);
 
-    [Menu("Per-Banner Cooldown (ms)", "How long to block a specific banner after placing it. Set higher than your movement speed out of banner radius.")]
-    public RangeNode<int> BannerCooldown { get; set; } = new RangeNode<int>(3000, 500, 10000);
+    [Menu("Min Buff Timer (ms)", "Consider buff active if remaining time is above this value")]
+    public RangeNode<int> MinBuffTimerMs { get; set; } = new RangeNode<int>(500, 0, 5000);
 
     [Menu("Enable Defiance Banner")]
     public ToggleNode EnableDefianceBanner { get; set; } = new ToggleNode(false);
@@ -32,6 +32,9 @@ public class LazyBannerSettings : ISettings
     [Menu("Defiance Banner Valour Threshold", "Minimum Valour required to place Defiance Banner")]
     public RangeNode<int> DefianceBannerValor { get; set; } = new RangeNode<int>(50, 0, 105);
 
+    [Menu("Defiance Banner Priority", "Priority for Defiance Banner (higher = more important)")]
+    public RangeNode<int> DefianceBannerPriority { get; set; } = new RangeNode<int>(3, 1, 10);
+
     [Menu("Enable War Banner")]
     public ToggleNode EnableWarBanner { get; set; } = new ToggleNode(false);
 
@@ -41,6 +44,9 @@ public class LazyBannerSettings : ISettings
     [Menu("War Banner Valour Threshold", "Minimum Valour required to place War Banner")]
     public RangeNode<int> WarBannerValor { get; set; } = new RangeNode<int>(50, 0, 105);
 
+    [Menu("War Banner Priority", "Priority for War Banner (higher = more important)")]
+    public RangeNode<int> WarBannerPriority { get; set; } = new RangeNode<int>(2, 1, 10);
+
     [Menu("Enable Dread Banner")]
     public ToggleNode EnableDreadBanner { get; set; } = new ToggleNode(false);
 
@@ -49,6 +55,9 @@ public class LazyBannerSettings : ISettings
 
     [Menu("Dread Banner Valour Threshold", "Minimum Valour required to place Dread Banner")]
     public RangeNode<int> DreadBannerValor { get; set; } = new RangeNode<int>(50, 0, 105);
+
+    [Menu("Dread Banner Priority", "Priority for Dread Banner (higher = more important)")]
+    public RangeNode<int> DreadBannerPriority { get; set; } = new RangeNode<int>(1, 1, 10);
 
     [Menu("Show Overlay", "Display banner status and Valour on screen")]
     public ToggleNode Render { get; set; } = new ToggleNode(false);
