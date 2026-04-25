@@ -8,7 +8,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace LazyBanner;
 
@@ -170,10 +169,22 @@ public class LazyBanner : BaseSettingsPlugin<LazyBannerSettings>
         UpdateSettings();
         Log($"Initialise complete. BuffKeys count: {_buffKeys.Count}");
 
-        GameController.PluginBridge.SaveMethod("LazyBanner.Enable",()=> Settings.Work.Value = true);
-        GameController.PluginBridge.SaveMethod("LazyBanner.Disable", () => Settings.Work.Value = false);
+        GameController.PluginBridge.SaveMethod("LazyBanner.Enable", Enable);
+        GameController.PluginBridge.SaveMethod("LazyBanner.Disable", Disable);
 
         return true;
+    }
+
+    public void Enable()
+    {
+        Settings.Work.Value = true;
+        Log("Plugin enabled via PluginBridge");
+    }
+    
+    public void Disable()
+    {
+        Settings.Work.Value = false;
+        Log("Plugin disabled via PluginBridge");
     }
 
     public override Job Tick()
